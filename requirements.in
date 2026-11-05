@@ -1,0 +1,4 @@
+# Direct runtime dependencies for the guardrails proxy (Python 3.12)
+starlette
+uvicorn
+httpx

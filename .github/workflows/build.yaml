@@ -1,0 +1,126 @@
+name: Build and push
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify native Podman runner
+        run: |
+          set -euo pipefail
+          command -v podman
+          podman info >/dev/null
+          case "$(uname -m):${{ matrix.arch }}" in
+            x86_64:amd64|aarch64:arm64) ;;
+            *) echo "Runner is not native for ${{ matrix.arch }}" >&2; exit 1 ;;
+          esac
+
+      - name: Build image
+        id: build
+        uses: redhat-actions/buildah-build@v2
+        with:
+          image: hsworkshop-guardrails-proxy
+          tags: ${{ github.sha }}-${{ matrix.arch }}
+          context: .
+          containerfiles: ./Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/kpiwko/hsworkshop-guardrails-proxy
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Smoke-test native image with arbitrary UID
+        env:
+          ARCH: ${{ matrix.arch }}
+          IMAGE: hsworkshop-guardrails-proxy
+          TAG: ${{ github.sha }}-${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          case "$(uname -m):${ARCH}" in
+            x86_64:amd64|aarch64:arm64) ;;
+            *) echo "Smoke test is not running natively for ${ARCH}" >&2; exit 1 ;;
+          esac
+
+          image_ref="${IMAGE}:${TAG}"
+          platform="$(podman image inspect --format '{{.Os}}/{{.Architecture}}' "${image_ref}")"
+          test "${platform}" = "linux/${ARCH}"
+
+          container="guardrails-proxy-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${ARCH}"
+          cleanup() {
+            podman rm --force "${container}" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          podman run --detach --name "${container}" \
+            --publish 127.0.0.1:18080:8080 \
+            --user 123456:0 \
+            "${image_ref}"
+          uid="$(podman exec "${container}" id -u)"
+          test "${uid}" = "123456"
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:18080/healthz; then
+              echo
+              exit 0
+            fi
+            sleep 1
+          done
+          podman logs "${container}"
+          echo "Container did not become healthy on native ${ARCH}" >&2
+          exit 1
+
+      - name: Push per-architecture image to GHCR
+        uses: redhat-actions/push-to-registry@v2
+        with:
+          image: hsworkshop-guardrails-proxy
+          tags: ${{ github.sha }}-${{ matrix.arch }}
+          registry: ghcr.io/kpiwko
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+  manifest:
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      packages: write
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish SHA and branch multi-architecture manifests
+        env:
+          IMAGE: ghcr.io/kpiwko/hsworkshop-guardrails-proxy
+        run: |
+          set -euo pipefail
+          docker buildx imagetools create \
+            --tag "${IMAGE}:${GITHUB_SHA}" \
+            --tag "${IMAGE}:main" \
+            --annotation "index:org.opencontainers.image.source=https://github.com/kpiwko/hsworkshop-guardrails-proxy" \
+            "${IMAGE}:${GITHUB_SHA}-amd64" \
+            "${IMAGE}:${GITHUB_SHA}-arm64"

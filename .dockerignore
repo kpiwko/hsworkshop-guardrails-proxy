@@ -1,0 +1,6 @@
+# Keep the image minimal: only guardrails_proxy.py and requirements.lock
+# are copied explicitly, but exclude everything else from the build
+# context so stray local files can never leak into an image layer.
+*
+!guardrails_proxy.py
+!requirements.lock
