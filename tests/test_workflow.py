@@ -40,9 +40,9 @@ class GuardrailsProxyWorkflowTest(unittest.TestCase):
             build["permissions"], {"contents": "read", "packages": "write"}
         )
         steps = build["steps"]
-        self.assertEqual(steps[0]["uses"], "actions/checkout@v4")
+        self.assertEqual(steps[0]["uses"], "actions/checkout@v7")
         build_step = next(step for step in steps if step.get("id") == "build")
-        self.assertEqual(build_step["uses"], "redhat-actions/buildah-build@v2")
+        self.assertEqual(build_step["uses"], "redhat-actions/buildah-build@v3")
         self.assertEqual(build_step["with"]["context"], ".")
         self.assertEqual(
             build_step["with"]["containerfiles"], "./Containerfile"
@@ -96,7 +96,7 @@ class GuardrailsProxyWorkflowTest(unittest.TestCase):
         self.assertEqual(manifest["permissions"], {"packages": "write"})
         self.assertNotIn("contents", manifest["permissions"])
         self.assertEqual(
-            manifest["steps"][0]["uses"], "docker/login-action@v3"
+            manifest["steps"][0]["uses"], "docker/login-action@v4"
         )
         create = manifest["steps"][1]["run"]
         self.assertIn("docker buildx imagetools create", create)

@@ -448,7 +448,7 @@ def create_app() -> Starlette:
     cfg = {
         "guardrails_url": os.environ.get("GUARDRAILS_URL", GUARDRAILS_URL_DEFAULT).rstrip("/"),
         "predictor_url": os.environ.get("PREDICTOR_URL", PREDICTOR_URL_DEFAULT).rstrip("/"),
-        "max_chats": int(_env_limit("GUARDRAILS_PROXY_MAX_CHATS", 4)),
+        "max_chats": int(_env_limit("GUARDRAILS_PROXY_MAX_CHATS", 40)),
         "max_body_bytes": int(_env_limit("GUARDRAILS_PROXY_MAX_BODY_BYTES", 1024 * 1024)),
         "discovery_timeout_seconds": _env_limit("GUARDRAILS_PROXY_DISCOVERY_TIMEOUT_SECONDS", 10.0),
         "body_seconds": _env_limit("GUARDRAILS_PROXY_BODY_SECONDS", 10.0),

@@ -279,8 +279,48 @@ def _admission_recovers(server, timeout=5.0):
 # ---------------------------------------------------------------------------
 
 
-def test_concurrent_chats_do_not_block_health_and_models(proxy):
+def test_concurrent_chats_do_not_block_health_and_models(guardrails, predictor, langfuse):
+    server = ProxyServer(
+        guardrails.url, predictor.url, langfuse.url,
+        extra_env={"GUARDRAILS_PROXY_MAX_CHATS": "4"},
+    )
+    try:
+        _check_concurrent_chats(server, guardrails)
+    finally:
+        server.stop()
+
+
+def test_default_admits_40_concurrent_chats_and_rejects_the_41st(proxy):
     server, guardrails, predictor, langfuse = proxy
+    release = threading.Event()
+    arrived = []
+    lock = threading.Lock()
+
+    def handler(method, path, headers, body):
+        if path.startswith("/v1/chat/completions"):
+            with lock:
+                arrived.append(1)
+            release.wait(timeout=30)
+            return 200, "application/json", _allowed_json()
+        return 200, "application/json", b"{}"
+
+    guardrails.handler = handler
+    held = [_open_chat_stream(server.url) for _ in range(40)]
+    try:
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline and len(arrived) < 40:
+            time.sleep(0.05)
+        assert len(arrived) == 40
+        r = httpx.post(f"{server.url}/v1/chat/completions", json=dict(CHAT_BODY, stream=True), timeout=5)
+        assert r.status_code == 503
+        assert httpx.get(f"{server.url}/healthz", timeout=1).status_code == 200
+    finally:
+        release.set()
+        for sock in held:
+            sock.close()
+
+
+def _check_concurrent_chats(server, guardrails):
     barrier = BarrierChat()
     guardrails.handler = barrier.handler
 

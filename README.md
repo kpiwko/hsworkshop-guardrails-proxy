@@ -28,7 +28,8 @@ streaming chat wedged `GET /v1/models` — the readiness probe — causing
 endpoint removal (`ECONNREFUSED` / model not found). This proxy is a
 Starlette app served by Uvicorn with app-local `GET /healthz` that never
 touches upstreams or chat admission, plus a per-pod bound of concurrent
-chats (default 4, provisional safety default, not capacity).
+chats (default 40; two replicas give 80. It is an admission bound, not a
+measured capacity: upstream inference/guardrails throughput still limits real load).
 
 ## Routes
 
@@ -46,7 +47,7 @@ fallback.
 
 | Variable | Default | Covers |
 | --- | --- | --- |
-| `GUARDRAILS_PROXY_MAX_CHATS` | `4` | concurrent `POST /v1/chat/completions` per pod |
+| `GUARDRAILS_PROXY_MAX_CHATS` | `40` | concurrent `POST /v1/chat/completions` per pod |
 | `GUARDRAILS_PROXY_MAX_BODY_BYTES` | `1048576` (1 MiB) | request body size |
 | `GUARDRAILS_PROXY_BODY_SECONDS` | `10` | request body upload time (slow uploads → 408) |
 | `GUARDRAILS_PROXY_DISCOVERY_TIMEOUT_SECONDS` | `10` | `GET /v1/models` upstream call only |
