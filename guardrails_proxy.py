@@ -162,6 +162,26 @@ def _forward_headers(request) -> dict:
     return {k: v for k, v in request.headers.items() if k in PASSTHROUGH_HEADERS}
 
 
+def _with_stream_usage(raw: bytes, req_json: dict) -> bytes:
+    """Ask the model for token usage on streaming requests.
+
+    OpenAI-compatible servers only report ``usage`` in a stream when
+    ``stream_options.include_usage`` is set. OpenWebUI does not set it, so
+    Langfuse (fed from OpenWebUI) would otherwise record zero tokens. An
+    explicit client choice is respected.
+    """
+    if not req_json.get("stream"):
+        return raw
+    opts = req_json.get("stream_options")
+    if opts is None:
+        req_json = dict(req_json, stream_options={"include_usage": True})
+    elif isinstance(opts, dict) and "include_usage" not in opts:
+        req_json = dict(req_json, stream_options=dict(opts, include_usage=True))
+    else:
+        return raw
+    return json.dumps(req_json, ensure_ascii=False).encode()
+
+
 def _blocked_json(model: str) -> bytes:
     return json.dumps({
         "id": "chatcmpl-blocked",
@@ -598,6 +618,7 @@ def create_app() -> Starlette:
         if not isinstance(model, str):
             model = ""
         user_message = _extract_last_user_message(req_json.get("messages"))
+        raw = _with_stream_usage(raw, req_json)
 
         started = time.monotonic()
         # Watch for client disconnect during the pre-response phases

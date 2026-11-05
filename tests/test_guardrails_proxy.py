@@ -659,6 +659,37 @@ def test_allowed_stream_relayed_with_headers_after_first_event(proxy):
     assert r.text.count("data: [DONE]") == 1  # relayed exactly once
 
 
+def _forwarded_json(guardrails):
+    return json.loads(guardrails.requests[-1][3])
+
+
+def test_streaming_request_asks_upstream_for_usage(proxy):
+    server, guardrails, predictor, langfuse = proxy
+    guardrails.handler = lambda m, p, h, b: (200, "text/event-stream", _allowed_sse())
+    httpx.post(f"{server.url}/v1/chat/completions", json=dict(CHAT_BODY, stream=True), timeout=5)
+    fwd = _forwarded_json(guardrails)
+    assert fwd["stream_options"] == {"include_usage": True}
+    assert fwd["messages"] == CHAT_BODY["messages"]
+
+
+def test_explicit_stream_options_are_respected_and_merged(proxy):
+    server, guardrails, predictor, langfuse = proxy
+    guardrails.handler = lambda m, p, h, b: (200, "text/event-stream", _allowed_sse())
+    httpx.post(f"{server.url}/v1/chat/completions",
+               json=dict(CHAT_BODY, stream=True, stream_options={"include_usage": False}), timeout=5)
+    assert _forwarded_json(guardrails)["stream_options"] == {"include_usage": False}
+    httpx.post(f"{server.url}/v1/chat/completions",
+               json=dict(CHAT_BODY, stream=True, stream_options={"x": 1}), timeout=5)
+    assert _forwarded_json(guardrails)["stream_options"] == {"x": 1, "include_usage": True}
+
+
+def test_non_streaming_request_is_forwarded_unchanged(proxy):
+    server, guardrails, predictor, langfuse = proxy
+    guardrails.handler = lambda m, p, h, b: (200, "application/json", _allowed_json())
+    httpx.post(f"{server.url}/v1/chat/completions", json=CHAT_BODY, timeout=5)
+    assert "stream_options" not in _forwarded_json(guardrails)
+
+
 # ---------------------------------------------------------------------------
 # I1: pooled client cookie isolation
 # ---------------------------------------------------------------------------
