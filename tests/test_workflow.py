@@ -8,7 +8,7 @@ import yaml
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORKFLOW_PATH = os.path.join(REPO_ROOT, ".github", "workflows", "build.yaml")
-DOCKERFILE_PATH = os.path.join(REPO_ROOT, "Dockerfile")
+CONTAINERFILE_PATH = os.path.join(REPO_ROOT, "Containerfile")
 IMAGE = "ghcr.io/kpiwko/hsworkshop-guardrails-proxy"
 
 
@@ -18,8 +18,8 @@ class GuardrailsProxyWorkflowTest(unittest.TestCase):
         with open(WORKFLOW_PATH, encoding="utf-8") as workflow:
             # BaseLoader preserves the GitHub Actions key `on` as a string.
             cls.workflow = yaml.load(workflow, Loader=yaml.BaseLoader)
-        with open(DOCKERFILE_PATH, encoding="utf-8") as dockerfile:
-            cls.dockerfile = dockerfile.read()
+        with open(CONTAINERFILE_PATH, encoding="utf-8") as containerfile:
+            cls.containerfile = containerfile.read()
 
     def test_push_and_manual_triggers_are_on_main(self):
         triggers = self.workflow["on"]
@@ -45,7 +45,7 @@ class GuardrailsProxyWorkflowTest(unittest.TestCase):
         self.assertEqual(build_step["uses"], "redhat-actions/buildah-build@v2")
         self.assertEqual(build_step["with"]["context"], ".")
         self.assertEqual(
-            build_step["with"]["containerfiles"], "./Dockerfile"
+            build_step["with"]["containerfiles"], "./Containerfile"
         )
         self.assertEqual(build_step["with"]["platforms"], "linux/${{ matrix.arch }}")
         self.assertIn(
@@ -107,13 +107,13 @@ class GuardrailsProxyWorkflowTest(unittest.TestCase):
         self.assertIn(IMAGE, manifest["steps"][1]["env"]["IMAGE"])
         self.assertNotIn("latest", create)
 
-    def test_dockerfile_digest_is_pinned_without_forcing_amd64(self):
+    def test_containerfile_digest_is_pinned_without_forcing_amd64(self):
         self.assertIn(
             "sha256:e695ab189fa2d082b1c61c69a6b888a5adeca61ceeccad107b1ed2a125721a9e",
-            self.dockerfile,
+            self.containerfile,
         )
-        self.assertNotIn("FROM --platform=linux/amd64", self.dockerfile)
-        self.assertIn("requirements.lock", self.dockerfile)
+        self.assertNotIn("FROM --platform=linux/amd64", self.containerfile)
+        self.assertIn("requirements.lock", self.containerfile)
 
 
 if __name__ == "__main__":

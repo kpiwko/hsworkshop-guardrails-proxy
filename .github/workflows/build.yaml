@@ -44,7 +44,7 @@ jobs:
           image: hsworkshop-guardrails-proxy
           tags: ${{ github.sha }}-${{ matrix.arch }}
           context: .
-          containerfiles: ./Dockerfile
+          containerfiles: ./Containerfile
           platforms: linux/${{ matrix.arch }}
           labels: |
             org.opencontainers.image.source=https://github.com/kpiwko/hsworkshop-guardrails-proxy
