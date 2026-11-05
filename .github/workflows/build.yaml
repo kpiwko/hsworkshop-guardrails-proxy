@@ -66,17 +66,21 @@ jobs:
           platform="$(podman image inspect --format '{{.Os}}/{{.Architecture}}' "${image_ref}")"
           test "${platform}" = "linux/${ARCH}"
 
+          # Rootless Podman only maps a small UID range, so an arbitrary UID such
+          # as 123456 cannot be set. Run the smoke test under rootful Podman.
+          podman save "${image_ref}" | sudo podman load >/dev/null
+
           container="guardrails-proxy-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${ARCH}"
           cleanup() {
-            podman rm --force "${container}" >/dev/null 2>&1 || true
+            sudo podman rm --force "${container}" >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
 
-          podman run --detach --name "${container}" \
+          sudo podman run --detach --name "${container}" \
             --publish 127.0.0.1:18080:8080 \
             --user 123456:0 \
             "${image_ref}"
-          uid="$(podman exec "${container}" id -u)"
+          uid="$(sudo podman exec "${container}" id -u)"
           test "${uid}" = "123456"
 
           for attempt in $(seq 1 30); do
@@ -86,7 +90,7 @@ jobs:
             fi
             sleep 1
           done
-          podman logs "${container}"
+          sudo podman logs "${container}"
           echo "Container did not become healthy on native ${ARCH}" >&2
           exit 1
 
