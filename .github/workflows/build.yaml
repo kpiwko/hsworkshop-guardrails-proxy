@@ -84,7 +84,7 @@ jobs:
           test "${uid}" = "123456"
 
           for attempt in $(seq 1 30); do
-            if curl --fail --silent --show-error http://127.0.0.1:18080/healthz; then
+            if curl --fail --silent http://127.0.0.1:18080/healthz; then
               echo
               exit 0
             fi
@@ -95,7 +95,7 @@ jobs:
           exit 1
 
       - name: Push per-architecture image to GHCR
-        uses: redhat-actions/push-to-registry@v2
+        uses: redhat-actions/push-to-registry@v3
         with:
           image: hsworkshop-guardrails-proxy
           tags: ${{ github.sha }}-${{ matrix.arch }}

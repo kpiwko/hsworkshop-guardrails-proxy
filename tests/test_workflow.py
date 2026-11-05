@@ -79,7 +79,7 @@ class GuardrailsProxyWorkflowTest(unittest.TestCase):
             step for step in self.workflow["jobs"]["build"]["steps"]
             if step.get("name") == "Push per-architecture image to GHCR"
         )
-        self.assertEqual(push["uses"], "redhat-actions/push-to-registry@v2")
+        self.assertEqual(push["uses"], "redhat-actions/push-to-registry@v3")
         self.assertEqual(push["with"]["registry"], "ghcr.io/kpiwko")
         self.assertEqual(push["with"]["image"], "hsworkshop-guardrails-proxy")
         self.assertEqual(push["with"]["username"], "${{ github.actor }}")
